@@ -6,8 +6,8 @@
 
 #define N_inicial 32   // Tamaño de la matriz
 #define N_final 32
-#define T 0.5 // Temperatura inicial
-#define T_final 0.5 // Temperatura final
+#define T 1.0 // Temperatura inicial
+#define T_final 2.0 // Temperatura final
 #define T_incremento 0.1 // Incremento de temperatura 
 #define P 1000000 //Número de pasos de Monte Carlo
 #define pasos_equilibrio 1000 // Número de pasos de equilibrado
@@ -190,7 +190,7 @@ void inicializar_espin(int** matriz, int n)
         matriz[0][j]=1;
         matriz[n-1][j]=-1;
     }
-    for (int i = 1; i < n; i++)
+    for (int i = 1; i < n-1; i++)
         for (int j = 0; j < n; j++)
             matriz[i][j] = (rand() % 2) ? 1 : -1;
 }
@@ -250,45 +250,47 @@ int delta_E(int** matriz, int n, int i1, int j1, int i2, int j2)
 
 void paso_kawasaki(int** matriz, int n, double t)
 {
-    int i, j;
-    i =rand() % n;
-    j= rand()%n;
-    int s= matriz[i][j];
+    int i = 1 + rand() % (n - 2); // Solo filas internas
+    int j = rand() % n;
+    int s = matriz[i][j];
 
-    // Posibles desplazamientos a vecinos
-    int vecinos[4][2]= {{-1,0}, {1,0}, {0,-1}, {0,1}};
+    int vecinos[4][2] = {{-1,0}, {1,0}, {0,-1}, {0,1}};
     int candidatos[4][2];
     int num_candidatos = 0;
 
-    //Busco algun vecino opuesto
-    for(int k=0; k<4; k++)
+    for (int k = 0; k < 4; k++)
     {
-        int ni = indice_periodico(i+vecinos[k][0],n);
-        int nj = indice_periodico(j+ vecinos[k][1], n);
+        int ni = i + vecinos[k][0];
+        int nj = j + vecinos[k][1];
 
-        if(matriz[ni][nj] != s)
+        // Asegurarse de que ni está en [1, n-2] y nj en [0, n-1]
+        if (ni >= 1 && ni < n - 1)
         {
-            candidatos[num_candidatos][0]=ni;
-            candidatos[num_candidatos][1]=nj;
-            num_candidatos++;
+            // Usar índice periódico solo en la dirección j
+            nj = indice_periodico(nj, n);
+
+            if (matriz[ni][nj] != s)
+            {
+                candidatos[num_candidatos][0] = ni;
+                candidatos[num_candidatos][1] = nj;
+                num_candidatos++;
+            }
         }
     }
 
-    //Si no hay vecinos, salto al siguiente paso
-    if(num_candidatos==0) return;
+    if (num_candidatos == 0) return;
 
-    //Elijo un vecino aleatorio
     int elegido = rand() % num_candidatos;
     int i2 = candidatos[elegido][0];
     int j2 = candidatos[elegido][1];
 
-    int dE= delta_E(matriz, n, i, j, i2, j2);
+    int dE = delta_E(matriz, n, i, j, i2, j2);
     double probabilidad = exp(-dE / t);
     double r = (double)rand() / RAND_MAX;
+
     if (dE < 0 || r < probabilidad)
     {
-        // Realizo el intercambio
-        int aux=matriz[i][j];
+        int aux = matriz[i][j];
         matriz[i][j] = matriz[i2][j2];
         matriz[i2][j2] = aux;
     }
