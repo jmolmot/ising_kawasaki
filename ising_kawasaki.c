@@ -4,12 +4,12 @@
 #include <string.h>
 #include <time.h>
 
-#define N_inicial 2   // Tamaño de la matriz
+#define N_inicial 32   // Tamaño de la matriz
 #define N_final 32
-#define T 1.50 // Temperatura inicial
-#define T_final 3.0 // Temperatura final
+#define T 0.5 // Temperatura inicial
+#define T_final 0.5 // Temperatura final
 #define T_incremento 0.1 // Incremento de temperatura 
-#define P 10000 //Número de pasos de Monte Carlo
+#define P 1000000 //Número de pasos de Monte Carlo
 #define pasos_equilibrio 1000 // Número de pasos de equilibrado
 #define pasos_medidas 1000 // Número de pasos de medida
 
@@ -33,6 +33,7 @@ double susceptibilidad_magnetica(int**matriz, int n, double t, int pasos_eq, int
 int main()
 {
     srand(time(NULL)); // Inicializa semilla de aleatoriedad
+    clock_t inicio = clock();
 
     FILE*fichero = fopen("resultados.txt", "w");
 
@@ -46,15 +47,17 @@ int main()
         printf("Error al reservar memoria para la matriz.\n");
         return 1;
     }
-        fprintf(fichero, "\n# ===== RESULTADOS PARA N = %d =====\n", N);
+        fprintf(fichero, "\n# ============ RESULTADOS PARA N = %d ============\n", N);
+        printf("\n# ============ RESULTADOS PARA N = %d ============\n", N);
         
         inicializar_espin(spin, N);
         copiar_matriz(spin, spin_inicial, N); // Copia el estado inicial
 
         fprintf(fichero, "#T\tE_por_espin\tDensidad_y\tCalor_especifico\tSusceptibilidad\n");
 
-        for(double T_actual=T; T_actual<=T_final+T_incremento; T_actual+=T_incremento)
+        for(double T_actual=T; T_actual<=T_final; T_actual+=T_incremento)
         {
+            printf("\n# ============ RESULTADOS PARA T = %g ============\n", T_actual);
             copiar_matriz(spin_inicial, spin, N); // Copia el estado inicial en cada iteración
             paso_montecarlo(spin, P, N, T_actual);
 
@@ -62,6 +65,21 @@ int main()
             double densidad_y = densidad_media_y(spin, N);
             double cN = calor_especifico(spin, N, T_actual, pasos_equilibrio, pasos_medidas);
             double chi = susceptibilidad_magnetica(spin, N, T_actual, pasos_equilibrio, pasos_medidas);
+
+            printf("Energia total: %f\n", E);
+            printf("\n");
+            printf("Energia por espin: %f\n", E / (N * N));
+            printf("\n");
+            printf("Densidad media de partículas (+1) en dirección y: %g\n", densidad_y);
+            printf("\n");
+            printf("Calor específico: %g\n", cN);
+            printf("\n");
+            printf("Magnetización superior: %g\n", magnetizacion_superior(spin, N));
+            printf("\n");
+            printf("Magnetización inferior: %g\n", magnetizacion_inferior(spin, N));
+            printf("Susceptibilidad magnética: %g\n", chi);
+        
+
 
             fprintf(fichero, "%g\t%g\t%g\t%g\t%g\n", T_actual, E, densidad_y, cN, chi);
 
@@ -123,6 +141,10 @@ int main()
 
     */
 
+    clock_t fin = clock();
+    double tiempo_total = (double)(fin - inicio) / CLOCKS_PER_SEC;
+    printf("Tiempo total de ejecución: %.2f segundos\n", tiempo_total);
+
     return 0;
 
     
@@ -163,7 +185,12 @@ void copiar_matriz(int** matriz, int** matriz_copia, int n)
 
 void inicializar_espin(int** matriz, int n)
 {
-    for (int i = 0; i < n; i++)
+    for(int j=0; j<n; j++)
+    {
+        matriz[0][j]=1;
+        matriz[n-1][j]=-1;
+    }
+    for (int i = 1; i < n; i++)
         for (int j = 0; j < n; j++)
             matriz[i][j] = (rand() % 2) ? 1 : -1;
 }
@@ -189,15 +216,9 @@ void liberar_matriz(int** matriz_liberada, int n)
 
 int indice_periodico(int i, int n)
 {
-    if( i>=n)
-    {
-        return 0;
-    }
-    if( i<0)
-    {
-        return n-1;
-    }
-    return i;
+    if( i>=n) return 0;
+    if( i<0) return n-1;
+    else return i;
 }
 
 int delta_E(int** matriz, int n, int i1, int j1, int i2, int j2)
@@ -229,48 +250,47 @@ int delta_E(int** matriz, int n, int i1, int j1, int i2, int j2)
 
 void paso_kawasaki(int** matriz, int n, double t)
 {
-    int i1, j1, i2, j2;
+    int i, j;
+    i =rand() % n;
+    j= rand()%n;
+    int s= matriz[i][j];
 
-    // Selección aleatoria de dos espines
-    do
+    // Posibles desplazamientos a vecinos
+    int vecinos[4][2]= {{-1,0}, {1,0}, {0,-1}, {0,1}};
+    int candidatos[4][2];
+    int num_candidatos = 0;
+
+    //Busco algun vecino opuesto
+    for(int k=0; k<4; k++)
     {
-        i1 = rand() % n;
-        j1 = rand() % n;
+        int ni = indice_periodico(i+vecinos[k][0],n);
+        int nj = indice_periodico(j+ vecinos[k][1], n);
 
-        int direccion = rand() % 4; // Dirección aleatoria
-
-        if (direccion == 0)
+        if(matriz[ni][nj] != s)
         {
-            i2 = indice_periodico(i1 - 1, n);
-            j2 = j1;
-        }  
-        else if (direccion == 1)
-        {
-            i2 = indice_periodico(i1 + 1, n);
-            j2 = j1;
+            candidatos[num_candidatos][0]=ni;
+            candidatos[num_candidatos][1]=nj;
+            num_candidatos++;
         }
-        else if (direccion == 2)
-        {
-            i2 = i1;
-            j2 = indice_periodico(j1 - 1, n);
-        }
-        else
-        {
-            i2 = i1;
-            j2 = indice_periodico(j1 + 1, n);
-        }
-    
-    }while (matriz[i1][j1] == matriz[i2][j2]); // Asegurarse de que los espines sean diferentes
+    }
 
-    int dE = delta_E(matriz, n, i1, j1, i2, j2);
+    //Si no hay vecinos, salto al siguiente paso
+    if(num_candidatos==0) return;
 
-    if(dE<0 || (rand()/(double)RAND_MAX) < exp(-dE/t))
+    //Elijo un vecino aleatorio
+    int elegido = rand() % num_candidatos;
+    int i2 = candidatos[elegido][0];
+    int j2 = candidatos[elegido][1];
+
+    int dE= delta_E(matriz, n, i, j, i2, j2);
+    double probabilidad = exp(-dE / t);
+    double r = (double)rand() / RAND_MAX;
+    if (dE < 0 || r < probabilidad)
     {
-        // Intercambiar espines
-        int aux = matriz[i1][j1];
-        matriz[i1][j1] = matriz[i2][j2];
+        // Realizo el intercambio
+        int aux=matriz[i][j];
+        matriz[i][j] = matriz[i2][j2];
         matriz[i2][j2] = aux;
-
     }
 }
 
