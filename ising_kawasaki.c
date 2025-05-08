@@ -47,7 +47,7 @@ int main()
         return 1;
     }
         fprintf(fichero, "\n# ===== RESULTADOS PARA N = %d =====\n", N);
-        s
+        
         inicializar_espin(spin, N);
         copiar_matriz(spin, spin_inicial, N); // Copia el estado inicial
 
