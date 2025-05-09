@@ -6,12 +6,12 @@
 
 #define N_inicial 32   // Tamaño de la matriz
 #define N_final 32
-#define T 1.0 // Temperatura inicial
+#define T 2.0 // Temperatura inicial
 #define T_final 2.0 // Temperatura final
 #define T_incremento 0.1 // Incremento de temperatura 
-#define P 1000000 //Número de pasos de Monte Carlo
-#define pasos_equilibrio 1000 // Número de pasos de equilibrado
-#define pasos_medidas 1000 // Número de pasos de medida
+#define P 3000000 //Número de pasos de Monte Carlo
+#define pasos_equilibrio 10000 // Número de pasos de equilibrado
+#define pasos_medidas 10000 // Número de pasos de medida
 
 // Prototipos de funciones
 int** crear_matriz(int n);
