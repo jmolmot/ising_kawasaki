@@ -6,12 +6,12 @@
 
 #define N_inicial 32   // Tamaño de la matriz
 #define N_final 32
-#define T 2.0 // Temperatura inicial
-#define T_final 2.0 // Temperatura final
+#define T 1.0 // Temperatura inicial
+#define T_final 1.0 // Temperatura final
 #define T_incremento 0.1 // Incremento de temperatura 
-#define P 3000 //Número de pasos de Monte Carlo
-#define pasos_equilibrio 1000 // Número de pasos de equilibrado
-#define pasos_medidas 1000 // Número de pasos de medida
+#define P 1500000 //Número de pasos de Monte Carlo
+#define pasos_equilibrio 10000 // Número de pasos de equilibrado
+#define pasos_medidas 10000 // Número de pasos de medida
 
 // Prototipos de funciones
 int** crear_matriz(int n);
@@ -159,7 +159,7 @@ int** crear_matriz(int n)
         exit(EXIT_FAILURE);
     }
 
-    for (int i = 0; i < n; i++)
+    for (int i = 0; i < n; ++i)
     {
         matriz[i] = (int*)malloc(n * sizeof(int));
         if (matriz[i] == NULL)
@@ -178,28 +178,28 @@ int** crear_matriz(int n)
 
 void copiar_matriz(int** matriz, int** matriz_copia, int n)
 {
-    for (int i = 0; i < n; i++)
-        for (int j = 0; j < n; j++)
+    for (int i = 0; i < n; ++i)
+        for (int j = 0; j < n; ++j)
             matriz_copia[i][j] = matriz[i][j];
 }
 
 void inicializar_espin(int** matriz, int n)
 {
-    for(int j=0; j<n; j++)
+    for(int j=0; j<n; ++j)
     {
         matriz[0][j]=1;
         matriz[n-1][j]=-1;
     }
-    for (int i = 1; i < n-1; i++)
-        for (int j = 0; j < n; j++)
+    for (int i = 1; i < n-1; ++i)
+        for (int j = 0; j < n; ++j)
             matriz[i][j] = (rand() % 2) ? 1 : -1;
 }
 
 void imprimir_matriz(int** matriz, int n, FILE*fichero)
 {
-    for (int i = 0; i < n; i++)
+    for (int i = 0; i < n; ++i)
     {
-        for (int j = 0; j < n; j++)
+        for (int j = 0; j < n; ++j)
             fprintf(fichero, "%c", matriz[i][j] == 1 ? '+' : '-');
         fprintf(fichero, "\n");
     }
@@ -207,18 +207,27 @@ void imprimir_matriz(int** matriz, int n, FILE*fichero)
 
 void liberar_matriz(int** matriz_liberada, int n)
 {
-    if (matriz_liberada == NULL) return;
-    for (int i = 0; i < n; i++)
+    for (int i = 0; i < n; ++i)
         free(matriz_liberada[i]);
     free(matriz_liberada);
-    printf("Memoria liberada correctamente.\n");
 }
 
 int indice_periodico(int i, int n)
 {
-    if( i>=n) return 0;
-    if( i<0) return n-1;
-    else return i;
+	int num;
+    if( i>=n)
+    {
+         num = 0;
+    }
+    else if( i<0)
+    {
+        num = n-1;
+    } 
+    else
+    {
+        num = i;
+    }
+    return num;
 }
 
 int delta_E(int** matriz, int n, int i1, int j1, int i2, int j2)
@@ -230,7 +239,7 @@ int delta_E(int** matriz, int n, int i1, int j1, int i2, int j2)
 
     int vecinos[4][2] = {{-1,0}, {1,0}, {0,-1}, {0,1}};
 
-    for(int k = 0; k < 4; k++)
+    for(int k = 0; k < 4; ++k)
     {
         int ni1 = indice_periodico(i1 + vecinos[k][0], n);
         int nj1 = indice_periodico(j1 + vecinos[k][1], n);
@@ -258,7 +267,7 @@ void paso_kawasaki(int** matriz, int n, double t)
     int candidatos[4][2];
     int num_candidatos = 0;
 
-    for (int k = 0; k < 4; k++)
+    for (int k = 0; k < 4; ++k)
     {
         int ni = i + vecinos[k][0];
         int nj = j + vecinos[k][1];
@@ -298,9 +307,9 @@ void paso_kawasaki(int** matriz, int n, double t)
 
 void paso_montecarlo(int** matriz, int pasos, int n, double t)
 {
-    for (int p=0; p < pasos; p++)
+    for (int p=0; p < pasos; ++p)
     {
-        for(int k=0; k < n*n; k++)
+        for(int k=0; k < n*n; ++k)
         {
             paso_kawasaki(matriz, n, t);
         }
@@ -319,9 +328,9 @@ double energia_total(int** matriz, int n)
 {
     double E = 0.0;
 
-    for(int i=0; i<n; i++)
+    for(int i=0; i<n; ++i)
     {
-        for(int j=0; j<n; j++)
+        for(int j=0; j<n; ++j)
         {
             int s = matriz[i][j];
 
@@ -346,10 +355,10 @@ double energia_total(int** matriz, int n)
 double densidad_media_y(int** matriz, int n)
 {
     double suma = 0.0;
-    for(int i=0; i<n; i++)
+    for(int i=0; i<n; ++i)
     {
         double cuenta_fila=0.0;
-        for (int j=0; j<n; j++)
+        for (int j=0; j<n; ++j)
         {
             if(matriz[i][j] == 1)
             {
@@ -369,7 +378,7 @@ double calor_especifico(int**matriz, int n, double t, int pasos_eq, int pasos_me
     double suma_E=0.0;
     double suma_E2= 0.0;
 
-    for(int i=0; i<pasos_medida; i++)
+    for(int i=0; i<pasos_medida; ++i)
     {
         paso_montecarlo(matriz, 1, n, t);
         
@@ -390,9 +399,9 @@ double magnetizacion_superior(int**matriz, int n)
 {
     double suma = 0.0;
 
-    for(int i=0; i<n/2; i++)
+    for(int i=0; i<n/2; ++i)
     {
-        for(int j=0; j<n; j++)
+        for(int j=0; j<n; ++j)
         {
             suma += matriz[i][j];
         }
@@ -405,9 +414,9 @@ double magnetizacion_inferior(int**matriz, int n)
 {
     double suma = 0.0;
 
-    for(int i=n/2; i<n; i++)
+    for(int i=n/2; i<n; ++i)
     {
-        for(int j=0; j<n; j++)
+        for(int j=0; j<n; ++j)
         {
             suma += matriz[i][j];
         }
@@ -423,7 +432,7 @@ double susceptibilidad_magnetica(int**matriz, int n, double t, int pasos_eq, int
     double suma_m=0.0;
     double suma_m2=0.0;
 
-    for(int i=0; i<pasos_medida; i++)
+    for(int i=0; i<pasos_medida; ++i)
     {
         paso_montecarlo(matriz, 1, n, t);
         
@@ -439,5 +448,3 @@ double susceptibilidad_magnetica(int**matriz, int n, double t, int pasos_eq, int
 
     return susceptibilidad;
 }
-
-//AHORA SÍ
