@@ -248,6 +248,7 @@ int delta_E(int** matriz, int n, int i1, int j1, int i2, int j2)
     return delta;
 }
 
+
 void paso_kawasaki(int** matriz, int n, double t)
 {
     int i = 1 + rand() % (n - 2); // Solo filas internas
