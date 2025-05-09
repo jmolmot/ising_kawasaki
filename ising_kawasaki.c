@@ -223,7 +223,6 @@ int indice_periodico(int i, int n)
 
 int delta_E(int** matriz, int n, int i1, int j1, int i2, int j2)
 {
-
     int s1 = matriz[i1][j1];
     int s2 = matriz[i2][j2];
     int delta = 0;
@@ -232,10 +231,11 @@ int delta_E(int** matriz, int n, int i1, int j1, int i2, int j2)
 
     for(int k = 0; k < 4; k++)
     {
-        int ni1 = indice_periodico(i1 + vecinos[k][0], n);
+        // Usar condiciones periódicas solo entre filas internas
+        int ni1 = indice_periodico_filas(i1 + vecinos[k][0], n);
         int nj1 = indice_periodico(j1 + vecinos[k][1], n);
 
-        int ni2 = indice_periodico(i2 + vecinos[k][0], n);
+        int ni2 = indice_periodico_filas(i2 + vecinos[k][0], n);
         int nj2 = indice_periodico(j2 + vecinos[k][1], n);
 
         if (ni1 != i2 || nj1 != j2)
@@ -247,7 +247,6 @@ int delta_E(int** matriz, int n, int i1, int j1, int i2, int j2)
 
     return delta;
 }
-
 
 void paso_kawasaki(int** matriz, int n, double t)
 {
@@ -308,20 +307,37 @@ void paso_montecarlo(int** matriz, int pasos, int n, double t)
     }
 }
 
+int indice_periodico_filas(int i, int n) {
+    if (i == 0) return 2;           // La fila 0 solo se conecta con la 2
+    if (i == n-1) return n-2;       // La fila n-1 solo se conecta con la n-2
+    if (i < 0) return n-2;          // Para filas internas
+    if (i >= n) return 1;           // Para filas internas
+    return i;
+}
+
 double energia_total(int** matriz, int n)
 {
     double E = 0.0;
-    
+
     for(int i=0; i<n; i++)
     {
         for(int j=0; j<n; j++)
         {
             int s = matriz[i][j];
-            
-            int vecino_derecha= matriz[i][indice_periodico(j+1, n)];
-            int vecino_abajo= matriz[indice_periodico(i+1, n)][j];
 
-            E -= s * (vecino_derecha + vecino_abajo); 
+            // Vecino a la derecha (condiciones periódicas en columnas)
+            int vecino_derecha = matriz[i][indice_periodico(j+1, n)];
+
+            // Vecino abajo (condiciones periódicas solo entre filas internas)
+            int vecino_abajo = 0;
+            int i_abajo = indice_periodico_filas(i+1, n);
+            // Solo filas internas se conectan periódicamente entre sí
+            if (i != n-1) {
+                vecino_abajo = matriz[i_abajo][j];
+            }
+            // Si i == n-1 (última fila), vecino_abajo = 0
+
+            E -= s * (vecino_derecha + vecino_abajo);
         }
     }
     return E;
