@@ -9,9 +9,9 @@
 #define T 2.0 // Temperatura inicial
 #define T_final 2.0 // Temperatura final
 #define T_incremento 0.1 // Incremento de temperatura 
-#define P 3000000 //Número de pasos de Monte Carlo
-#define pasos_equilibrio 10000 // Número de pasos de equilibrado
-#define pasos_medidas 10000 // Número de pasos de medida
+#define P 3000 //Número de pasos de Monte Carlo
+#define pasos_equilibrio 1000 // Número de pasos de equilibrado
+#define pasos_medidas 1000 // Número de pasos de medida
 
 // Prototipos de funciones
 int** crear_matriz(int n);
@@ -223,6 +223,7 @@ int indice_periodico(int i, int n)
 
 int delta_E(int** matriz, int n, int i1, int j1, int i2, int j2)
 {
+
     int s1 = matriz[i1][j1];
     int s2 = matriz[i2][j2];
     int delta = 0;
@@ -231,11 +232,10 @@ int delta_E(int** matriz, int n, int i1, int j1, int i2, int j2)
 
     for(int k = 0; k < 4; k++)
     {
-        // Usar condiciones periódicas solo entre filas internas
-        int ni1 = indice_periodico_filas(i1 + vecinos[k][0], n);
+        int ni1 = indice_periodico(i1 + vecinos[k][0], n);
         int nj1 = indice_periodico(j1 + vecinos[k][1], n);
 
-        int ni2 = indice_periodico_filas(i2 + vecinos[k][0], n);
+        int ni2 = indice_periodico(i2 + vecinos[k][0], n);
         int nj2 = indice_periodico(j2 + vecinos[k][1], n);
 
         if (ni1 != i2 || nj1 != j2)
@@ -417,6 +417,7 @@ double magnetizacion_inferior(int**matriz, int n)
 }
 
 double susceptibilidad_magnetica(int**matriz, int n, double t, int pasos_eq, int pasos_medida)
+
 {
     paso_montecarlo(matriz, pasos_eq, n, t);
     double suma_m=0.0;
@@ -438,3 +439,5 @@ double susceptibilidad_magnetica(int**matriz, int n, double t, int pasos_eq, int
 
     return susceptibilidad;
 }
+
+//AHORA SÍ
