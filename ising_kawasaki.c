@@ -6,12 +6,20 @@
 
 int N_inicial = 32;   // Tamaño de la matriz
 int N_final = 32;
+<<<<<<< HEAD
 double T = 1.0; // Temperatura inicial
 double T_final = 1.0; // Temperatura final
 double T_incremento = 0.1; // Incremento de temperatura 
 int P = 50000; //Número de pasos de Monte Carlo
 int pasos_equilibrio = 10000; // Número de pasos de equilibrado
 int pasos_medidas = 10000; // Número de pasos de medida
+=======
+double T = 2.0; // Temperatura inicial
+double T_final = 2.0; // Temperatura final
+double T_incremento = 0.1; // Incremento de temperatura 
+int pasos_equilibrio = 1000; // Número de pasos de equilibrado
+int pasos_medidas = 100000; // Número de pasos de medida
+>>>>>>> 08834b5d3cf9f8f47ab5e4e8a7d9fef7df820f9b
 
 // Prototipos de funciones
 int** crear_matriz(int n);
@@ -109,11 +117,21 @@ int main()
                 fprintf(fchi, "%g\t%d\t%g\n", T_actual, paso, chi);
 
                 // Guardar la matriz completa en matrices.txt
+<<<<<<< HEAD
                 fprintf(fmat, "T=%g Paso=%d\n", T_actual, paso);
                 for(int i=0; i<N; ++i)
                 {
                     for(int j=0; j<N; ++j)
                         fprintf(fmat, "%d ", spin[i][j]);
+=======
+                 for(int i=0; i<N; ++i)
+                {
+                    for(int j=0; j<N; ++j) 
+                    {
+                        fprintf(fmat, "%d", spin[i][j]);
+                        if (j < N-1) fprintf(fmat, ", ");
+                    }
+>>>>>>> 08834b5d3cf9f8f47ab5e4e8a7d9fef7df820f9b
                     fprintf(fmat, "\n");
                 }
                 fprintf(fmat, "\n");
