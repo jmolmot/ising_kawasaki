@@ -47,11 +47,7 @@ import io
 # ========================================
 file_in = "matrices.txt" # Nombre del fichero de datos
 file_out = "ising" # Nombre del fichero de salida (sin extensión)
-<<<<<<< HEAD
-interval = 100 # Tiempo entre fotogramas en milisegundos
-=======
-interval = 50 # Tiempo entre fotogramas en milisegundos
->>>>>>> 08834b5d3cf9f8f47ab5e4e8a7d9fef7df820f9b
+interval = 0.01 # Tiempo entre fotogramas en milisegundos
 save_to_file = False # False: muestra la animación por pantalla,
                      # True: la guarda en un fichero
 dpi = 150 # Calidad del vídeo de salida (dots per inch)

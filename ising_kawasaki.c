@@ -6,20 +6,11 @@
 
 int N_inicial = 32;   // Tamaño de la matriz
 int N_final = 32;
-<<<<<<< HEAD
-double T = 1.0; // Temperatura inicial
-double T_final = 1.0; // Temperatura final
-double T_incremento = 0.1; // Incremento de temperatura 
-int P = 50000; //Número de pasos de Monte Carlo
-int pasos_equilibrio = 10000; // Número de pasos de equilibrado
-int pasos_medidas = 10000; // Número de pasos de medida
-=======
-double T = 2.0; // Temperatura inicial
-double T_final = 2.0; // Temperatura final
+double T = 1.5; // Temperatura inicial
+double T_final = 1.5; // Temperatura final
 double T_incremento = 0.1; // Incremento de temperatura 
 int pasos_equilibrio = 1000; // Número de pasos de equilibrado
-int pasos_medidas = 100000; // Número de pasos de medida
->>>>>>> 08834b5d3cf9f8f47ab5e4e8a7d9fef7df820f9b
+int pasos_medidas = 50000; // Número de pasos de medida
 
 // Prototipos de funciones
 int** crear_matriz(int n);
@@ -28,6 +19,7 @@ void inicializar_espin(int** matriz, int n);
 void imprimir_matriz(int** matriz, int n, FILE*fichero);
 void liberar_matriz(int** matriz_liberada, int n);
 int indice_periodico(int i, int n);
+int indice_periodico_filas(int i, int n);
 int delta_E(int** matriz, int n, int i1, int j1, int i2, int j2);
 void paso_kawasaki(int** matriz, int n, double t);
 void paso_montecarlo(int** matriz, int p, int n, double t);
@@ -117,13 +109,6 @@ int main()
                 fprintf(fchi, "%g\t%d\t%g\n", T_actual, paso, chi);
 
                 // Guardar la matriz completa en matrices.txt
-<<<<<<< HEAD
-                fprintf(fmat, "T=%g Paso=%d\n", T_actual, paso);
-                for(int i=0; i<N; ++i)
-                {
-                    for(int j=0; j<N; ++j)
-                        fprintf(fmat, "%d ", spin[i][j]);
-=======
                  for(int i=0; i<N; ++i)
                 {
                     for(int j=0; j<N; ++j) 
@@ -131,7 +116,6 @@ int main()
                         fprintf(fmat, "%d", spin[i][j]);
                         if (j < N-1) fprintf(fmat, ", ");
                     }
->>>>>>> 08834b5d3cf9f8f47ab5e4e8a7d9fef7df820f9b
                     fprintf(fmat, "\n");
                 }
                 fprintf(fmat, "\n");
@@ -199,6 +183,7 @@ void copiar_matriz(int** matriz, int** matriz_copia, int n)
             matriz_copia[i][j] = matriz[i][j];
 }
 
+/*
 void inicializar_espin(int** matriz, int n)
 {
     for(int j=0; j<n; ++j)
@@ -210,6 +195,44 @@ void inicializar_espin(int** matriz, int n)
         for (int j = 0; j < n; ++j)
             matriz[i][j] = (rand() % 2) ? 1 : -1;
 }
+*/
+
+void inicializar_espin(int** matriz, int n)
+{
+    // Primera fila: todo +1
+    for(int j=0; j<n; ++j)
+        matriz[0][j]=1;
+
+    // Última fila: todo -1
+    for(int j=0; j<n; ++j)
+        matriz[n-1][j]=-1;
+
+    // Resto de filas: más +1 que -1 para asegurar magnetización positiva
+    for (int i = 1; i < n-1; ++i) {
+        int num_pos = n/2 + 1; // Más +1 que -1
+        int num_neg = n - num_pos;
+        // Rellenar la fila con los valores
+        for (int j = 0; j < num_pos; ++j)
+            matriz[i][j] = 1;
+        for (int j = num_pos; j < n; ++j)
+            matriz[i][j] = -1;
+        // Mezclar la fila para aleatorizar la posición de los +1 y -1
+        for (int j = n-1; j > 0; --j) {
+            int k = rand() % (j+1);
+            int tmp = matriz[i][j];
+            matriz[i][j] = matriz[i][k];
+            matriz[i][k] = tmp;
+        }
+    }
+
+    if (rand() % 2 == 0) 
+    {
+        for (int i = 0; i < n; ++i)
+            for (int j = 0; j < n; ++j)
+                matriz[i][j] *= -1;
+    }
+}
+
 
 void imprimir_matriz(int** matriz, int n, FILE*fichero)
 {
@@ -244,6 +267,14 @@ int indice_periodico(int i, int n)
         num = i;
     }
     return num;
+}
+
+int indice_periodico_filas(int i, int n) {
+    if (i == 0) return 2;           // La fila 0 solo se conecta con la 2
+    if (i == n-1) return n-2;       // La fila n-1 solo se conecta con la n-2
+    if (i < 0) return n-2;          // Para filas internas
+    if (i >= n) return 1;           // Para filas internas
+    return i;
 }
 
 int delta_E(int** matriz, int n, int i1, int j1, int i2, int j2)
@@ -329,14 +360,6 @@ void paso_montecarlo(int** matriz, int pasos, int n, double t)
             paso_kawasaki(matriz, n, t);
         }
     }
-}
-
-int indice_periodico_filas(int i, int n) {
-    if (i == 0) return 2;           // La fila 0 solo se conecta con la 2
-    if (i == n-1) return n-2;       // La fila n-1 solo se conecta con la n-2
-    if (i < 0) return n-2;          // Para filas internas
-    if (i >= n) return 1;           // Para filas internas
-    return i;
 }
 
 double energia_total(int** matriz, int n)
