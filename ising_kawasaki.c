@@ -5,12 +5,11 @@
 #include <time.h>
 
 int N_inicial = 32;   // Tamaño de la matriz
-int N_final = 32;
-double T = 1.5; // Temperatura inicial
-double T_final = 1.5; // Temperatura final
-double T_incremento = 0.1; // Incremento de temperatura 
-int pasos_equilibrio = 1000; // Número de pasos de equilibrado
-int pasos_medidas = 50000; // Número de pasos de medida
+int N_final = 128;
+double T = 1.0; // Temperatura inicial
+double T_final = 7; // Temperatura final
+double T_incremento = 0.5; // Incremento de temperatura 
+int pasos_medidas = 10000; // Número de pasos de medida
 
 // Prototipos de funciones
 int** crear_matriz(int n);
@@ -36,113 +35,105 @@ int main()
     srand(time(NULL));
     clock_t inicio = clock();
 
-    FILE* fmag = fopen("magnetizaciones.txt", "w");
-    FILE* fener = fopen("energias.txt", "w");
-    FILE* fdens = fopen("densidades.txt", "w");
-    FILE* fcv = fopen("cv.txt", "w");
-    FILE* fchi = fopen("chi.txt", "w");
-    FILE* fmat = fopen("matrices.txt", "w");
-
-    for(int N=N_inicial; N<=N_final; N*=2)
+    for(int N = N_inicial; N <= N_final; N *= 2)
     {
+        // Construye nombres de archivo según N
+        char fname_cv[64], fname_chi[64], fname_mag[64], fname_ener[64], fname_dens[64], fname_conf[64];
+        sprintf(fname_cv, "cv%d.txt", N);
+        sprintf(fname_chi, "chi%d.txt", N);
+        sprintf(fname_mag, "magnetizaciones%d.txt", N);
+        sprintf(fname_ener, "energias%d.txt", N);
+        sprintf(fname_dens, "densidades%d.txt", N);
+        sprintf(fname_conf, "configuracion%d.txt", N);
+
+        FILE* fcv = fopen(fname_cv, "w");
+        FILE* fchi = fopen(fname_chi, "w");
+        FILE* fmag = fopen(fname_mag, "w");
+        FILE* fener = fopen(fname_ener, "w");
+        FILE* fdens = fopen(fname_dens, "w");
+        FILE* fconf = fopen(fname_conf, "w");
+
         int** spin = crear_matriz(N);
         int** spin_inicial = crear_matriz(N);
         inicializar_espin(spin, N);
         copiar_matriz(spin, spin_inicial, N);
 
-        for(double T_actual=T; T_actual<=T_final; T_actual+=T_incremento)
+        for(double T_actual = T; T_actual <= T_final; T_actual += T_incremento)
         {
             copiar_matriz(spin_inicial, spin, N);
-            paso_montecarlo(spin, pasos_equilibrio, N, T_actual);
 
             double suma_E = 0.0, suma_E2 = 0.0;
-            double suma_M = 0.0, suma_M2 = 0.0;
             double suma_msup = 0.0, suma_minf = 0.0;
             double suma_dens = 0.0;
-            double suma_msup_chi= 0.0, suma_minf_chi = 0.0;
+            double suma_chi = 0.0;
 
-            for(int paso=0; paso<pasos_medidas; ++paso)
+            for(int paso = 0; paso < pasos_medidas; ++paso)
             {
                 paso_montecarlo(spin, 1, N, T_actual);
 
-                // Magnetización superior e inferior
+                // Guardar configuración en el archivo correspondiente
+                fprintf(fconf, "Paso %d T %.3f\n", paso, T_actual);
+                for (int i = 0; i < N; ++i) {
+                    for (int j = 0; j < N; ++j) {
+                        fprintf(fconf, "%d ", spin[i][j]);
+                    }
+                    fprintf(fconf, "\n");
+                }
+                fprintf(fconf, "\n");
+
                 double m_sup = magnetizacion_superior(spin, N);
                 double m_inf = magnetizacion_inferior(spin, N);
                 suma_msup += m_sup;
                 suma_minf += m_inf;
 
-                suma_msup_chi += m_sup;
-                suma_minf_chi += m_inf;
-
-                // Energía total
                 double E = energia_total(spin, N);
                 suma_E += E;
                 suma_E2 += E*E;
 
-
-                // Densidad media
                 suma_dens += densidad_media_y(spin, N);
 
-                // Guardado en archivos
-                fprintf(fmag, "%g\t%g\t%g\t%d\t%g\n", T_actual, m_sup, m_inf, paso, (m_sup+m_inf)/2.0);
-                fprintf(fener, "%g\t%g\t%d\n", T_actual, E, paso);
-                fprintf(fdens, "%g\t%d", T_actual, paso);
-                for(int i=0; i<N; ++i)
-                {
-                    double dens_col = 0.0;
-                    for(int j=0; j<N; ++j)
-                        if(spin[i][j] == 1) dens_col += 1.0;
-                    dens_col /= N;
-                    fprintf(fdens, "\t%g", dens_col);
-                }
-                fprintf(fdens, "\n");
-
-                // Calor específico y susceptibilidad magnética instantáneos
-                double prom_E = suma_E / (paso+1);
-                double prom_E2 = suma_E2 / (paso+1);
-                double cv = (prom_E2 - prom_E*prom_E) / (T_actual*T_actual*N*N);
-                fprintf(fcv, "%g\t%d\t%g\n", T_actual, paso, cv);
-
-                double prom_msup_chi = suma_msup_chi / (paso+1);
-                double prom_minf_chi = suma_minf_chi / (paso+1);
-                double chi = (prom_minf_chi-prom_msup_chi*prom_msup_chi) / (T_actual*N*N);
-                fprintf(fchi, "%g\t%d\t%g\n", T_actual, paso, chi);
-
-                // Guardar la matriz completa en matrices.txt
-                 for(int i=0; i<N; ++i)
-                {
-                    for(int j=0; j<N; ++j) 
-                    {
-                        fprintf(fmat, "%d", spin[i][j]);
-                        if (j < N-1) fprintf(fmat, ", ");
-                    }
-                    fprintf(fmat, "\n");
-                }
-                fprintf(fmat, "\n");
+                // Para chi: usa la magnetización total (media de sup e inf)
+                double m_avg = 0.5 * (m_sup + m_inf);
+                suma_chi += m_avg * m_avg;
             }
-        }
-        int* histo = (int*)calloc(N+1, sizeof(int));
-        histograma_spins_fila(spin, N, histo);
 
-        FILE* fhisto = fopen("histograma.txt", "w");
-        fprintf(fhisto, "#spins+1\tcuentas   \n");
-        for(int k=0; k<=N; ++k)
-        {
-            fprintf(fhisto, "%d\t%d\n", k, histo[k]);
+            // Promedios
+            double prom_E = suma_E / pasos_medidas;
+            double prom_E2 = suma_E2 / pasos_medidas;
+            double prom_msup = suma_msup / pasos_medidas;
+            double prom_minf = suma_minf / pasos_medidas;
+            double prom_dens = suma_dens / pasos_medidas;
+            double prom_chi = suma_chi / pasos_medidas;
+
+            // Calor específico
+            double cv = (prom_E2 - prom_E*prom_E) / (T_actual*T_actual*N*N);
+            fprintf(fcv, "%g\t%g\n", T_actual, cv);
+
+            // Susceptibilidad magnética (usando <m^2> - <m>^2)
+            double prom_m = 0.5 * (prom_msup + prom_minf);
+            double chi = (prom_chi - prom_m*prom_m) / (T_actual*N*N);
+            fprintf(fchi, "%g\t%g\n", T_actual, chi);
+
+            // Magnetización superior, inferior y media
+            fprintf(fmag, "%g\t%g\t%g\t%g\n", T_actual, prom_msup, prom_minf, prom_m);
+
+            // Energía promedio
+            fprintf(fener, "%g\t%g\n", T_actual, prom_E);
+
+            // Densidad promedio
+            fprintf(fdens, "%g\t%g\n", T_actual, prom_dens);
         }
-        fclose(fhisto);
-        free(histo);
 
         liberar_matriz(spin, N);
         liberar_matriz(spin_inicial, N);
-    }
 
-    fclose(fmag);
-    fclose(fener);
-    fclose(fdens);
-    fclose(fcv);
-    fclose(fchi);
-    fclose(fmat);
+        fclose(fcv);
+        fclose(fchi);
+        fclose(fmag);
+        fclose(fener);
+        fclose(fdens);
+        fclose(fconf);
+    }
 
     clock_t fin = clock();
     double tiempo_total = (double)(fin - inicio) / CLOCKS_PER_SEC;
@@ -183,7 +174,7 @@ void copiar_matriz(int** matriz, int** matriz_copia, int n)
             matriz_copia[i][j] = matriz[i][j];
 }
 
-/*
+
 void inicializar_espin(int** matriz, int n)
 {
     for(int j=0; j<n; ++j)
@@ -195,8 +186,8 @@ void inicializar_espin(int** matriz, int n)
         for (int j = 0; j < n; ++j)
             matriz[i][j] = (rand() % 2) ? 1 : -1;
 }
-*/
 
+/*
 void inicializar_espin(int** matriz, int n)
 {
     // Primera fila: todo +1
@@ -232,7 +223,7 @@ void inicializar_espin(int** matriz, int n)
                 matriz[i][j] *= -1;
     }
 }
-
+*/
 
 void imprimir_matriz(int** matriz, int n, FILE*fichero)
 {
