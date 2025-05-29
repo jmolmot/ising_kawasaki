@@ -7,9 +7,10 @@
 int N_inicial = 32;   // Tamaño de la matriz
 int N_final = 128;
 double T = 1.0; // Temperatura inicial
-double T_final = 7; // Temperatura final
-double T_incremento = 0.5; // Incremento de temperatura 
-int pasos_medidas = 10000; // Número de pasos de medida
+double T_final = 5; // Temperatura final
+double T_incremento = 0.25; // Incremento de temperatura 
+int pasos_medidas = 5000; // Número de pasos de medida
+int pasos_eq = 10000; // Pasos de equilibrio
 
 // Prototipos de funciones
 int** crear_matriz(int n);
@@ -34,6 +35,12 @@ int main()
 {
     srand(time(NULL));
     clock_t inicio = clock();
+
+    int num_N = 0;
+    for(int n = N_inicial; n <= N_final; n *= 2) num_N++;
+    int num_temperaturas = (int)((T_final - T) / T_incremento) + 1;
+    int total_iter = num_N * num_temperaturas;
+    int iter_count = 0;
 
     for(int N = N_inicial; N <= N_final; N *= 2)
     {
@@ -60,7 +67,14 @@ int main()
 
         for(double T_actual = T; T_actual <= T_final; T_actual += T_incremento)
         {
+            // PROGRESO GLOBAL
+            double porcentaje = 100.0 * iter_count / total_iter;
+            printf("\rProgreso: %.1f%% (N=%d, T=%.2f)", porcentaje, N, T_actual);
+            fflush(stdout);
+            iter_count++;
+
             copiar_matriz(spin_inicial, spin, N);
+            paso_montecarlo(spin, pasos_eq, N, T_actual);
 
             double suma_E = 0.0, suma_E2 = 0.0;
             double suma_msup = 0.0, suma_minf = 0.0;
@@ -135,6 +149,7 @@ int main()
         fclose(fconf);
     }
 
+    printf("\n"); // Salto de línea tras terminar todo
     clock_t fin = clock();
     double tiempo_total = (double)(fin - inicio) / CLOCKS_PER_SEC;
     printf("Tiempo total de ejecución: %.2f segundos\n", tiempo_total);
@@ -174,7 +189,7 @@ void copiar_matriz(int** matriz, int** matriz_copia, int n)
             matriz_copia[i][j] = matriz[i][j];
 }
 
-
+/*
 void inicializar_espin(int** matriz, int n)
 {
     for(int j=0; j<n; ++j)
@@ -186,44 +201,14 @@ void inicializar_espin(int** matriz, int n)
         for (int j = 0; j < n; ++j)
             matriz[i][j] = (rand() % 2) ? 1 : -1;
 }
+*/
 
-/*
 void inicializar_espin(int** matriz, int n)
 {
-    // Primera fila: todo +1
-    for(int j=0; j<n; ++j)
-        matriz[0][j]=1;
-
-    // Última fila: todo -1
-    for(int j=0; j<n; ++j)
-        matriz[n-1][j]=-1;
-
-    // Resto de filas: más +1 que -1 para asegurar magnetización positiva
-    for (int i = 1; i < n-1; ++i) {
-        int num_pos = n/2 + 1; // Más +1 que -1
-        int num_neg = n - num_pos;
-        // Rellenar la fila con los valores
-        for (int j = 0; j < num_pos; ++j)
-            matriz[i][j] = 1;
-        for (int j = num_pos; j < n; ++j)
-            matriz[i][j] = -1;
-        // Mezclar la fila para aleatorizar la posición de los +1 y -1
-        for (int j = n-1; j > 0; --j) {
-            int k = rand() % (j+1);
-            int tmp = matriz[i][j];
-            matriz[i][j] = matriz[i][k];
-            matriz[i][k] = tmp;
-        }
-    }
-
-    if (rand() % 2 == 0) 
-    {
-        for (int i = 0; i < n; ++i)
-            for (int j = 0; j < n; ++j)
-                matriz[i][j] *= -1;
-    }
+    for (int i = 0; i < n; ++i)
+        for (int j = 0; j < n; ++j)
+            matriz[i][j] = (rand() % 2) ? 1 : -1;
 }
-*/
 
 void imprimir_matriz(int** matriz, int n, FILE*fichero)
 {
@@ -260,14 +245,6 @@ int indice_periodico(int i, int n)
     return num;
 }
 
-int indice_periodico_filas(int i, int n) {
-    if (i == 0) return 2;           // La fila 0 solo se conecta con la 2
-    if (i == n-1) return n-2;       // La fila n-1 solo se conecta con la n-2
-    if (i < 0) return n-2;          // Para filas internas
-    if (i >= n) return 1;           // Para filas internas
-    return i;
-}
-
 int delta_E(int** matriz, int n, int i1, int j1, int i2, int j2)
 {
     int s1 = matriz[i1][j1];
@@ -292,54 +269,6 @@ int delta_E(int** matriz, int n, int i1, int j1, int i2, int j2)
     }
 
     return delta;
-}
-
-void paso_kawasaki(int** matriz, int n, double t)
-{
-    int i = 1 + rand() % (n - 2); // Solo filas internas
-    int j = rand() % n;
-    int s = matriz[i][j];
-
-    int vecinos[4][2] = {{-1,0}, {1,0}, {0,-1}, {0,1}};
-    int candidatos[4][2];
-    int num_candidatos = 0;
-
-    for (int k = 0; k < 4; ++k)
-    {
-        int ni = i + vecinos[k][0];
-        int nj = j + vecinos[k][1];
-
-        // Asegurarse de que ni está en [1, n-2] y nj en [0, n-1]
-        if (ni >= 1 && ni < n - 1)
-        {
-            // Usar índice periódico solo en la dirección j
-            nj = indice_periodico(nj, n);
-
-            if (matriz[ni][nj] != s)
-            {
-                candidatos[num_candidatos][0] = ni;
-                candidatos[num_candidatos][1] = nj;
-                num_candidatos++;
-            }
-        }
-    }
-
-    if (num_candidatos == 0) return;
-
-    int elegido = rand() % num_candidatos;
-    int i2 = candidatos[elegido][0];
-    int j2 = candidatos[elegido][1];
-
-    int dE = delta_E(matriz, n, i, j, i2, j2);
-    double probabilidad = exp(-dE / t);
-    double r = (double)rand() / RAND_MAX;
-
-    if (dE < 0 || r < probabilidad)
-    {
-        int aux = matriz[i][j];
-        matriz[i][j] = matriz[i2][j2];
-        matriz[i2][j2] = aux;
-    }
 }
 
 void paso_montecarlo(int** matriz, int pasos, int n, double t)
@@ -491,5 +420,114 @@ void histograma_spins_fila(int** matriz, int n, int* histo)
             if (matriz[i][j] == 1)
                 cuenta++;
         histo[cuenta]++;
+    }
+}
+
+/*
+int indice_periodico_filas(int i, int n) {
+    if (i == 0) return 2;           // La fila 0 solo se conecta con la 2
+    if (i == n-1) return n-2;       // La fila n-1 solo se conecta con la n-2
+    if (i < 0) return n-2;          // Para filas internas
+    if (i >= n) return 1;           // Para filas internas
+    return i;
+}
+
+void paso_kawasaki(int** matriz, int n, double t)
+{
+    int i = 1 + rand() % (n - 2); // Solo filas internas
+    int j = rand() % n;
+    int s = matriz[i][j];
+
+    int vecinos[4][2] = {{-1,0}, {1,0}, {0,-1}, {0,1}};
+    int candidatos[4][2];
+    int num_candidatos = 0;
+
+    for (int k = 0; k < 4; ++k)
+    {
+        int ni = i + vecinos[k][0];
+        int nj = j + vecinos[k][1];
+
+        // Asegurarse de que ni está en [1, n-2] y nj en [0, n-1]
+        if (ni >= 1 && ni < n - 1)
+        {
+            // Usar índice periódico solo en la dirección j
+            nj = indice_periodico(nj, n);
+
+            if (matriz[ni][nj] != s)
+            {
+                candidatos[num_candidatos][0] = ni;
+                candidatos[num_candidatos][1] = nj;
+                num_candidatos++;
+            }
+        }
+    }
+
+    if (num_candidatos == 0) return;
+
+    int elegido = rand() % num_candidatos;
+    int i2 = candidatos[elegido][0];
+    int j2 = candidatos[elegido][1];
+
+    int dE = delta_E(matriz, n, i, j, i2, j2);
+    double probabilidad = exp(-dE / t);
+    double r = (double)rand() / RAND_MAX;
+
+    if (dE < 0 || r < probabilidad)
+    {
+        int aux = matriz[i][j];
+        matriz[i][j] = matriz[i2][j2];
+        matriz[i2][j2] = aux;
+    }
+}
+*/
+
+
+// --- Versión estándar: condiciones periódicas en filas ---
+int indice_periodico_filas(int i, int n) {
+    // Periodicidad estándar: conecta la última fila con la primera
+    if (i >= n) return 0;
+    if (i < 0) return n - 1;
+    return i;
+}
+
+// --- Versión estándar: Kawasaki con condiciones periódicas en ambas direcciones ---
+void paso_kawasaki(int** matriz, int n, double t)
+{
+    int i = rand() % n;
+    int j = rand() % n;
+    int s = matriz[i][j];
+
+    int vecinos[4][2] = {{-1,0}, {1,0}, {0,-1}, {0,1}};
+    int candidatos[4][2];
+    int num_candidatos = 0;
+
+    for (int k = 0; k < 4; ++k)
+    {
+        int ni = indice_periodico_filas(i + vecinos[k][0], n);
+        int nj = indice_periodico(j + vecinos[k][1], n);
+
+        if (matriz[ni][nj] != s)
+        {
+            candidatos[num_candidatos][0] = ni;
+            candidatos[num_candidatos][1] = nj;
+            num_candidatos++;
+        }
+    }
+
+    if (num_candidatos == 0) return;
+
+    int elegido = rand() % num_candidatos;
+    int i2 = candidatos[elegido][0];
+    int j2 = candidatos[elegido][1];
+
+    int dE = delta_E(matriz, n, i, j, i2, j2);
+    double probabilidad = exp(-dE / t);
+    double r = (double)rand() / RAND_MAX;
+
+    if (dE < 0 || r < probabilidad)
+    {
+        int aux = matriz[i][j];
+        matriz[i][j] = matriz[i2][j2];
+        matriz[i2][j2] = aux;
     }
 }
