@@ -2,13 +2,13 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 # Lista de tamaños de red disponibles
-Ns = [32, 64, 128]
+Ns = [15]
 
 # Helper para leer dos columnas
 def read_two_columns(filename):
     return np.loadtxt(filename, unpack=True)
 
-fig, axs = plt.subplots(3, 3, figsize=(18, 12))
+fig, axs = plt.subplots(3, 2, figsize=(18, 12))
 fig.suptitle('Ising Kawasaki Simulation Results (comparativa tamaños de red)', fontsize=16)
 
 # --- Calor específico (Cv) ---
@@ -28,14 +28,14 @@ axs[2,0].grid(True)
 for N in Ns:
     try:
         T_chi, chi = read_two_columns(f'chi{N}.txt')
-        axs[1,2].plot(T_chi, chi, label=f'N={N}')
+        axs[1,1].plot(T_chi, chi, label=f'N={N}')
     except Exception as e:
         print(f'No se pudo leer chi{N}.txt: {e}')
-axs[1,2].set_title('Susceptibilidad Magnética')
-axs[1,2].set_xlabel('Temperatura')
-axs[1,2].set_ylabel('Chi')
-axs[1,2].legend()
-axs[1,2].grid(True)
+axs[1,1].set_title('Susceptibilidad Magnética')
+axs[1,1].set_xlabel('Temperatura')
+axs[1,1].set_ylabel('Chi')
+axs[1,1].legend()
+axs[1,1].grid(True)
 
 # --- Densidad ---
 for N in Ns:
@@ -81,7 +81,7 @@ for idx, N in enumerate(Ns):
 
 # --- Subgráficas vacías ---
 axs[1,1].axis('off')
-axs[2,2].axis('off')
+
 
 plt.tight_layout(rect=[0, 0.03, 1, 0.96])
 plt.show()

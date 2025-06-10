@@ -1,533 +1,381 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <math.h>
-#include <string.h>
+#include <stdbool.h>
 #include <time.h>
 
-int N_inicial = 32;   // Tamaño de la matriz
-int N_final = 128;
-double T = 1.0; // Temperatura inicial
-double T_final = 5; // Temperatura final
-double T_incremento = 0.25; // Incremento de temperatura 
-int pasos_medidas = 5000; // Número de pasos de medida
-int pasos_eq = 10000; // Pasos de equilibrio
+#define N 64 
+#define PASOS 100000
 
-// Prototipos de funciones
-int** crear_matriz(int n);
-void copiar_matriz(int** matriz, int** matriz_copia, int n);
-void inicializar_espin(int** matriz, int n);
-void imprimir_matriz(int** matriz, int n, FILE*fichero);
-void liberar_matriz(int** matriz_liberada, int n);
-int indice_periodico(int i, int n);
-int indice_periodico_filas(int i, int n);
-int delta_E(int** matriz, int n, int i1, int j1, int i2, int j2);
-void paso_kawasaki(int** matriz, int n, double t);
-void paso_montecarlo(int** matriz, int p, int n, double t);
-double energia_total(int** matriz, int n);
-double densidad_media_y(int** matriz, int n);
-double calor_especifico(int**matriz, int n, double t, int pasos_eq, int pasos_medida);
-double magnetizacion_superior(int**matriz, int n);
-double magnetizacion_inferior(int**matriz, int n);
-double susceptibilidad_magnetica(int**matriz, int n, double t, int pasos_eq, int pasos_medida);
-void histograma_spins_fila(int** matriz, int n, int* histo);
+double T_inicial = 0.25;
+double T_final = 4.0;
+double T_incremento = 0.25;
 
-int main()
-{
-    srand(time(NULL));
-    clock_t inicio = clock();
+void inicializarRed_mitad(int red[N][N]);
+void Guardar_Red(FILE *file, int red[N][N]);
+double Energia_local(int red[N][N], int i1, int j1, int i2, int j2);
+double calcularEnergia_Total_Inicial(int red[N][N]);
+double magnetizacion_mitad_superior(int red[N][N]);
+double magnetizacion_mitad_inferior(int red[N][N]);
+void calcularDensidadesFila(int red[N][N], int fila, int *densidadpositivo, int *densidadnegativo);
+void calcular_CalorEspecifico(double sumaEnergia, double sumaEnergiaCuadrada, int conteo, double T, double *cv);
+void calcular_Susceptibilidad(double sumaMag, double sumaMag2, int conteo, double T, double *chi);
+int algoritmoMetropolis(int red[N][N], double *sumaEnergia, double *sumaEnergiacuadrada, double *sumaMagnetizacionSuperior, double *sumaMagnetizacionInferior, int *configuracionesCambiadas, double *sumadensidadpositivo, double *sumadensidadnegativo, double *sumaMagnetizacion2, double T);
 
-    int num_N = 0;
-    for(int n = N_inicial; n <= N_final; n *= 2) num_N++;
-    int num_temperaturas = (int)((T_final - T) / T_incremento) + 1;
-    int total_iter = num_N * num_temperaturas;
-    int iter_count = 0;
+// --- MAIN AL PRINCIPIO ---
+int main() {
 
-    for(int N = N_inicial; N <= N_final; N *= 2)
-    {
-        // Construye nombres de archivo según N
-        char fname_cv[64], fname_chi[64], fname_mag[64], fname_ener[64], fname_dens[64], fname_conf[64];
-        sprintf(fname_cv, "cv%d.txt", N);
-        sprintf(fname_chi, "chi%d.txt", N);
-        sprintf(fname_mag, "magnetizaciones%d.txt", N);
-        sprintf(fname_ener, "energias%d.txt", N);
-        sprintf(fname_dens, "densidades%d.txt", N);
-        sprintf(fname_conf, "configuracion%d.txt", N);
+    int red[N][N];
+    srand(time(NULL)); // Semilla para números aleatorios
+    static const char* tiempo_file = "tiempos.txt";
+    static int primera_vez = 1;
+    static clock_t tiempo_inicio, tiempo_fin;
+    static double tiempo_total;
 
-        FILE* fcv = fopen(fname_cv, "w");
-        FILE* fchi = fopen(fname_chi, "w");
-        FILE* fmag = fopen(fname_mag, "w");
-        FILE* fener = fopen(fname_ener, "w");
-        FILE* fdens = fopen(fname_dens, "w");
-        FILE* fconf = fopen(fname_conf, "w");
+     tiempo_inicio = clock();
 
-        int** spin = crear_matriz(N);
-        int** spin_inicial = crear_matriz(N);
-        inicializar_espin(spin, N);
-        copiar_matriz(spin, spin_inicial, N);
+    // Archivos con nombre dinámico según N (no según temperatura)
+    char fname_magsup[64], fname_maginfer[64], fname_denspos[64], fname_densneg[64], fname_cv[64], fname_chi[64];
+    sprintf(fname_magsup, "promedio_magnetizacionsuperior%d.txt", N);
+    sprintf(fname_maginfer, "promedio_magnetizacioninferior%d.txt", N);
+    sprintf(fname_denspos, "promedio_densidadpositivo%d.txt", N);
+    sprintf(fname_densneg, "promedio_densidadnegativo%d.txt", N);
+    sprintf(fname_cv, "filecv%d.txt", N);
+    sprintf(fname_chi, "susceptibilidad%d.txt", N);
 
-        for(double T_actual = T; T_actual <= T_final; T_actual += T_incremento)
-        {
-            // PROGRESO GLOBAL
-            double porcentaje = 100.0 * iter_count / total_iter;
-            printf("\rProgreso: %.1f%% (N=%d, T=%.2f)", porcentaje, N, T_actual);
-            fflush(stdout);
-            iter_count++;
+    FILE *magnetizacionSuperiorFile = fopen(fname_magsup, "w");
+    FILE *magnetizacionInferiorFile = fopen(fname_maginfer, "w");
+    FILE *filedensidadpositivo = fopen(fname_denspos, "w");
+    FILE *filedensidadnegativo = fopen(fname_densneg, "w");
+    FILE *filecv = fopen(fname_cv, "w");
+    FILE *filechi = fopen(fname_chi, "w");
 
-            copiar_matriz(spin_inicial, spin, N);
-            paso_montecarlo(spin, pasos_eq, N, T_actual);
+    for (double T = T_inicial; T <= T_final + 1e-8; T += T_incremento) {
+        // Inicializar la red: mitad positivos, mitad negativos
+        inicializarRed_mitad(red);
 
-            double suma_E = 0.0, suma_E2 = 0.0;
-            double suma_msup = 0.0, suma_minf = 0.0;
-            double suma_dens = 0.0;
-            double suma_chi = 0.0;
+        // Variables para acumular magnetización
+        double sumaMagnetizacionSuperior = 0.0;
+        double sumaMagnetizacionInferior = 0.0;
+        int configuracionesCambiadas = 0;
+        double sumaEnergia = 0.0;
+        double sumaEnergiacuadrada = 0.0;
+        double sumadensidadpositivo = 0.0;
+        double sumadensidadnegativo = 0.0;
+        double cv, chi, sumaMagnetizacion2 = 0.0;
 
-            for(int paso = 0; paso < pasos_medidas; ++paso)
-            {
-                paso_montecarlo(spin, 1, N, T_actual);
+        // Ejecutar el algoritmo de Monte Carlo
+        algoritmoMetropolis(red, &sumaEnergia, &sumaEnergiacuadrada, 
+            &sumaMagnetizacionSuperior, &sumaMagnetizacionInferior, 
+            &configuracionesCambiadas, &sumadensidadpositivo, 
+            &sumadensidadnegativo, &sumaMagnetizacion2, T);
 
-                // Guardar configuración en el archivo correspondiente
-                fprintf(fconf, "Paso %d T %.3f\n", paso, T_actual);
-                for (int i = 0; i < N; ++i) {
-                    for (int j = 0; j < N; ++j) {
-                        fprintf(fconf, "%d ", spin[i][j]);
-                    }
-                    fprintf(fconf, "\n");
-                }
-                fprintf(fconf, "\n");
+        // Calcular promedios
+        double promedioMagnetizacionSuperior = sumaMagnetizacionSuperior / configuracionesCambiadas;
+        double promedioMagnetizacionInferior = sumaMagnetizacionInferior / configuracionesCambiadas;
+        double promedioDensidadPositiva = sumadensidadpositivo / (configuracionesCambiadas*N);
+        double promedioDensidadNegativa = sumadensidadnegativo / (configuracionesCambiadas*N);
 
-                double m_sup = magnetizacion_superior(spin, N);
-                double m_inf = magnetizacion_inferior(spin, N);
-                suma_msup += m_sup;
-                suma_minf += m_inf;
+        // Calor específico y susceptibilidad
+        calcular_CalorEspecifico(sumaEnergia, sumaEnergiacuadrada, configuracionesCambiadas, T, &cv);
+        calcular_Susceptibilidad(sumaMagnetizacionSuperior, sumaMagnetizacion2, configuracionesCambiadas, T, &chi);
 
-                double E = energia_total(spin, N);
-                suma_E += E;
-                suma_E2 += E*E;
+        // Guardar resultados en los archivos (una línea por temperatura)
+        fprintf(magnetizacionSuperiorFile, "%.6f %.2f\n", promedioMagnetizacionSuperior, T);
+        fprintf(magnetizacionInferiorFile, "%.6f %.2f\n", promedioMagnetizacionInferior, T);
+        fprintf(filedensidadnegativo, "%.6f %.2f\n", promedioDensidadNegativa, T);
+        fprintf(filedensidadpositivo, "%.6f %.2f\n", promedioDensidadPositiva, T);
+        fprintf(filecv, "%.6f %.2f\n", cv, T);
+        fprintf(filechi, "%.10f %.2f\n", chi, T);
 
-                suma_dens += densidad_media_y(spin, N);
-
-                // Para chi: usa la magnetización total (media de sup e inf)
-                double m_avg = 0.5 * (m_sup + m_inf);
-                suma_chi += m_avg * m_avg;
-            }
-
-            // Promedios
-            double prom_E = suma_E / pasos_medidas;
-            double prom_E2 = suma_E2 / pasos_medidas;
-            double prom_msup = suma_msup / pasos_medidas;
-            double prom_minf = suma_minf / pasos_medidas;
-            double prom_dens = suma_dens / pasos_medidas;
-            double prom_chi = suma_chi / pasos_medidas;
-
-            // Calor específico
-            double cv = (prom_E2 - prom_E*prom_E) / (T_actual*T_actual*N*N);
-            fprintf(fcv, "%g\t%g\n", T_actual, cv);
-
-            // Susceptibilidad magnética (usando <m^2> - <m>^2)
-            double prom_m = 0.5 * (prom_msup + prom_minf);
-            double chi = (prom_chi - prom_m*prom_m) / (T_actual*N*N);
-            fprintf(fchi, "%g\t%g\n", T_actual, chi);
-
-            // Magnetización superior, inferior y media
-            fprintf(fmag, "%g\t%g\t%g\t%g\n", T_actual, prom_msup, prom_minf, prom_m);
-
-            // Energía promedio
-            fprintf(fener, "%g\t%g\n", T_actual, prom_E);
-
-            // Densidad promedio
-            fprintf(fdens, "%g\t%g\n", T_actual, prom_dens);
-        }
-
-        liberar_matriz(spin, N);
-        liberar_matriz(spin_inicial, N);
-
-        fclose(fcv);
-        fclose(fchi);
-        fclose(fmag);
-        fclose(fener);
-        fclose(fdens);
-        fclose(fconf);
+        printf("T=%.2f completado\n", T);
     }
 
-    printf("\n"); // Salto de línea tras terminar todo
-    clock_t fin = clock();
-    double tiempo_total = (double)(fin - inicio) / CLOCKS_PER_SEC;
-    printf("Tiempo total de ejecución: %.2f segundos\n", tiempo_total);
+    fclose(magnetizacionSuperiorFile);
+    fclose(magnetizacionInferiorFile);
+    fclose(filedensidadpositivo);
+    fclose(filedensidadnegativo);
+    fclose(filecv);
+    fclose(filechi);
 
+    printf("Simulación completada.\n");
+
+    tiempo_fin = clock();
+    tiempo_total = (double)(tiempo_fin - tiempo_inicio) / CLOCKS_PER_SEC;
+
+    FILE *ftiempos = fopen(tiempo_file, "a");
+    if (ftiempos != NULL) {
+        fprintf(ftiempos, "%d\t%.6f\n", N, tiempo_total);
+        fclose(ftiempos);
+    } else {
+        printf("No se pudo abrir el archivo de tiempos.\n");
+    }
+
+    return 0;
     return 0;
 }
 
-int** crear_matriz(int n)
-{
-    int** matriz = (int**)malloc(n * sizeof(int*));
-    if (matriz == NULL)
-    {
-        perror("Error al asignar memoria para la matriz");
-        exit(EXIT_FAILURE);
-    }
+// --- FUNCIONES AUXILIARES CON NOMBRES COMO EN ising_kawasaki.c ---
 
-    for (int i = 0; i < n; ++i)
-    {
-        matriz[i] = (int*)malloc(n * sizeof(int));
-        if (matriz[i] == NULL)
-        {
-            perror("Error al asignar memoria para una fila");
-            for (int j = 0; j < i; j++)
-                free(matriz[j]);
-            free(matriz);
-            exit(EXIT_FAILURE);
-        }
-    }
+void inicializarRed_mitad(int red[N][N]) {
+    int espines_totales = (N-2) * N;
+    int mitad = espines_totales / 2;
+    int positivos = 0, negativos = 0;
 
-    return matriz;
-}
-
-void copiar_matriz(int** matriz, int** matriz_copia, int n)
-{
-    for (int i = 0; i < n; ++i)
-        for (int j = 0; j < n; ++j)
-            matriz_copia[i][j] = matriz[i][j];
-}
-
-/*
-void inicializar_espin(int** matriz, int n)
-{
-    for(int j=0; j<n; ++j)
-    {
-        matriz[0][j]=1;
-        matriz[n-1][j]=-1;
-    }
-    for (int i = 1; i < n-1; ++i)
-        for (int j = 0; j < n; ++j)
-            matriz[i][j] = (rand() % 2) ? 1 : -1;
-}
-*/
-
-void inicializar_espin(int** matriz, int n)
-{
-    for (int i = 0; i < n; ++i)
-        for (int j = 0; j < n; ++j)
-            matriz[i][j] = (rand() % 2) ? 1 : -1;
-}
-
-void imprimir_matriz(int** matriz, int n, FILE*fichero)
-{
-    for (int i = 0; i < n; ++i)
-    {
-        for (int j = 0; j < n; ++j)
-            fprintf(fichero, "%c", matriz[i][j] == 1 ? '+' : '-');
-        fprintf(fichero, "\n");
-    }
-}
-
-void liberar_matriz(int** matriz_liberada, int n)
-{
-    for (int i = 0; i < n; ++i)
-        free(matriz_liberada[i]);
-    free(matriz_liberada);
-}
-
-int indice_periodico(int i, int n)
-{
-	int num;
-    if( i>=n)
-    {
-         num = 0;
-    }
-    else if( i<0)
-    {
-        num = n-1;
-    } 
-    else
-    {
-        num = i;
-    }
-    return num;
-}
-
-int delta_E(int** matriz, int n, int i1, int j1, int i2, int j2)
-{
-    int s1 = matriz[i1][j1];
-    int s2 = matriz[i2][j2];
-    int delta = 0;
-
-    int vecinos[4][2] = {{-1,0}, {1,0}, {0,-1}, {0,1}};
-
-    for(int k = 0; k < 4; ++k)
-    {
-        int ni1 = indice_periodico_filas(i1 + vecinos[k][0], n);
-        int nj1 = indice_periodico(j1 + vecinos[k][1], n);
-
-        int ni2 = indice_periodico_filas(i2 + vecinos[k][0], n);
-        int nj2 = indice_periodico(j2 + vecinos[k][1], n);
-
-        if (ni1 != i2 || nj1 != j2)
-            delta += 2 * s1 * matriz[ni1][nj1];
-
-        if (ni2 != i1 || nj2 != j1)
-            delta += 2 * s2 * matriz[ni2][nj2];
-    }
-
-    return delta;
-}
-
-void paso_montecarlo(int** matriz, int pasos, int n, double t)
-{
-    for (int p=0; p < pasos; ++p)
-    {
-        for(int k=0; k < n*n; ++k)
-        {
-            paso_kawasaki(matriz, n, t);
-        }
-    }
-}
-
-double energia_total(int** matriz, int n)
-{
-    double E = 0.0;
-
-    for(int i=0; i<n; ++i)
-    {
-        for(int j=0; j<n; ++j)
-        {
-            int s = matriz[i][j];
-
-            // Vecino a la derecha (condiciones periódicas en columnas)
-            int vecino_derecha = matriz[i][indice_periodico(j+1, n)];
-
-            // Vecino abajo (condiciones periódicas solo entre filas internas)
-            int vecino_abajo = 0;
-            int i_abajo = indice_periodico_filas(i+1, n);
-            // Solo filas internas se conectan periódicamente entre sí
-            if (i != n-1) {
-                vecino_abajo = matriz[i_abajo][j];
+    for (int i = 0; i < N; i++) {
+        for (int j = 0; j < N; j++) {
+            if (i == 0) {
+                red[i][j] = -1; // Borde superior con espines negativos
+            } else if (i == N - 1) {
+                red[i][j] = 1; // Borde inferior con espines positivos
+            } else {
+                if (positivos < mitad) {
+                    red[i][j] = -1;
+                    positivos++;
+                } else {
+                    red[i][j] = 1;
+                    positivos++;
+                }
             }
-            // Si i == n-1 (última fila), vecino_abajo = 0
-
-            E -= s * (vecino_derecha + vecino_abajo);
         }
     }
+}
+
+void Guardar_Red(FILE *file, int red[N][N]) {
+    for (int i = 0; i < N; i++) {
+        for (int j = 0; j < N; j++) {
+            fprintf(file, "%d", red[i][j]);
+            if (j < N - 1) {
+                fprintf(file, ", ");
+            }
+        }
+        fprintf(file, "\n");
+    }
+    fprintf(file, "\n");
+}
+
+double Energia_local(int red[N][N], int i1, int j1, int i2, int j2 ) {
+    int E = 0;
+
+    // Vecinos del primer espín (i1, j1)
+    int arriba1, abajo1, izquierda1, derecha1;
+
+    if (i1 == 1) arriba1 = -1;
+    else arriba1 = red[i1-1][j1];
+
+    if (i1 == N - 2) abajo1 = 1;
+    else abajo1 = red[i1+1][j1];
+
+    if (j1 == 0) izquierda1 = red[i1][N-1];
+    else izquierda1 = red[i1][j1-1];
+
+    if (j1 == N - 1) derecha1 = red[i1][0];
+    else derecha1 = red[i1][j1+1];
+
+    // Vecinos del segundo espín (i2, j2)
+    int arriba2, abajo2, izquierda2, derecha2;
+
+    if (i2 == 1) arriba2 = -1;
+    else arriba2 = red[i2-1][j2];
+
+    if (i2 == N - 2) abajo2 = 1;
+    else abajo2 = red[i2+1][j2];
+
+    if (j2 == 0) izquierda2 = red[i2][N-1];
+    else izquierda2 = red[i2][j2-1];
+
+    if (j2 == N - 1) derecha2 = red[i2][0];
+    else derecha2 = red[i2][j2+1];
+
+    if ((i1 == i2 && (j1 + 1) % N == j2)) {
+        derecha1 = 0;
+        izquierda2 = 0;
+    }
+    if ((i1 == i2 && (j1 - 1 + N) % N == j2)) {
+        izquierda1 = 0;
+        derecha2 = 0;
+    }
+    if ((i1 + 1 == i2 && j1 == j2)) {
+        arriba2 = 0;
+        abajo1 = 0;
+    }
+    if ((i1 - 1 == i2 && j1 == j2)) {
+        abajo2 = 0;
+        arriba1 = 0;
+    }
+
+    E = -red[i1][j1] * (arriba1 + abajo1 + izquierda1 + derecha1);
+    E += -red[i2][j2] * (arriba2 + abajo2 + izquierda2 + derecha2);
+
     return E;
 }
 
-double densidad_media_y(int** matriz, int n)
-{
-    double suma = 0.0;
-    for(int i=0; i<n; ++i)
-    {
-        double cuenta_fila=0.0;
-        for (int j=0; j<n; ++j)
-        {
-            if(matriz[i][j] == 1)
-            {
-                cuenta_fila += 1.0;
+double calcularEnergia_Total_Inicial(int red[N][N]) {
+    double energia = 0.0;
+    for (int i = 1; i < N-1; i++) {
+        for (int j = 0; j < N; j++) {
+            int sumaVecinos = red[i-1][j] + red[i+1][j] +
+                              red[i][(j + 1) % N] + red[i][(j - 1 + N) % N];
+            energia += red[i][j] * sumaVecinos;
+        }
+    }
+    return -0.5 * energia;
+}
+
+double magnetizacion_mitad_superior(int red[N][N]) {
+    int suma = 0;
+    for (int i = 0; i < N / 2; i++) {
+        for (int j = 0; j < N; j++) {
+            suma += red[i][j];
+        }
+    }
+    return (double) fabs(suma) / ((N / 2) * N);
+}
+
+double magnetizacion_mitad_inferior(int red[N][N]) {
+    int suma = 0;
+    for (int i = N / 2; i < N; i++) {
+        for (int j = 0; j < N; j++) {
+            suma += red[i][j];
+        }
+    }
+    return (double) fabs(suma) / ((N / 2) * N);
+}
+
+void calcularDensidadesFila(int red[N][N], int fila, int *densidadpositivo, int *densidadnegativo) {
+    int positivos = 0;
+    int negativos = 0;
+    for (int j = 0; j < N; j++) {
+        if (red[fila][j] == 1) positivos++;
+        else if (red[fila][j] == -1) negativos++;
+    }
+    *densidadpositivo = positivos;
+    *densidadnegativo = negativos;
+}
+
+void calcular_CalorEspecifico(double sumaEnergia, double sumaEnergiaCuadrada, int conteo, double T, double *cv) {
+    double promedio_E = sumaEnergia / conteo;
+    double promedio_E2 = sumaEnergiaCuadrada / conteo;
+    double varianza_E = promedio_E2 - (promedio_E * promedio_E);
+    *cv = varianza_E / ((N-2)*N*T*T);
+}
+
+void calcular_Susceptibilidad(double sumaMag, double sumaMag2, int conteo, double T, double *chi) {
+    double promedio_M = sumaMag / conteo;
+    double promedio_M2 = sumaMag2 / conteo;
+    double varianza_M = promedio_M2 - (promedio_M * promedio_M);
+    *chi = varianza_M / (N * N * T);
+}
+
+int algoritmoMetropolis(int red[N][N], 
+    double *sumaEnergia, double *sumaEnergiacuadrada, 
+    double *sumaMagnetizacionSuperior, double *sumaMagnetizacionInferior, 
+    int *configuracionesCambiadas, double *sumadensidadpositivo, 
+    double *sumadensidadnegativo, double *sumaMagnetizacion2, double T) {
+
+    double energias[PASOS];
+    double energia_actual;
+
+    int densidadpositivo = 0.0;
+    int densidadnegativo = 0.0;
+    int fila = N / 4;
+
+    double energiaConfiguracion = 0.0;
+
+    FILE *file = fopen("configuraciones.txt", "w");
+    if (file == NULL) {
+        printf("Error al abrir el fichero.\n");
+        return 1;
+    }
+
+    FILE *energiaFile = fopen("energia_pmontecarlo.txt", "w");
+    if (energiaFile == NULL) {
+        printf("Error al abrir el fichero de energía.\n");
+        return 1;
+    }
+
+    energia_actual = calcularEnergia_Total_Inicial(red);
+
+    for (int j = 0; j < PASOS; j++) {
+        for (int i = 0; i < N*N; i++) {
+            int j1 = rand() % N;
+            int i1 = rand() % (N-2) + 1;
+
+            int deltaI = 0, deltaJ = 0;
+
+            if (i1 == 1) {
+                int direccion = rand() % 3;
+                if (direccion == 0) deltaJ = 1;
+                else if (direccion == 1) deltaJ = -1;
+                else deltaI = 1;
+            } else if (i1 == N - 2) {
+                int direccion = rand() % 3;
+                if (direccion == 0) deltaJ = -1;
+                else if (direccion == 1) deltaJ = 1;
+                else deltaI = -1;
+            } else {
+                int direccion = rand() % 4;
+                if (direccion == 0) deltaJ = 1;
+                else if (direccion == 1) deltaJ = -1;
+                else if (direccion == 2) deltaI = 1;
+                else if (direccion == 3) deltaI = -1;
+            }
+
+            int i2 = i1 + deltaI;
+            int j2 = j1 + deltaJ;
+
+            if (j2 < 0) j2 = N - 1;
+            else if (j2 >= N) j2 = 0;
+
+            if (red[i1][j1] == red[i2][j2]) continue;
+
+            int energiaAntes = Energia_local(red, i1, j1, i2, j2);
+
+            int temp = red[i1][j1];
+            red[i1][j1] = red[i2][j2];
+            red[i2][j2] = temp;
+
+            int energiaDespues = Energia_local(red, i1, j1, i2, j2);
+
+            int difE = energiaDespues - energiaAntes;
+
+            double probabilidad = (difE > 0) ? exp(-difE / T) : 1.0;
+            double r = (double)rand() / RAND_MAX;
+
+            if (r > probabilidad) {
+                temp = red[i1][j1];
+                red[i1][j1] = red[i2][j2];
+                red[i2][j2] = temp;
+            } else {
+                energia_actual += difE;
             }
         }
-        double densidad_fila = cuenta_fila / n;
-        suma += densidad_fila;
-    }
-    return suma / n;
-}
 
-double calor_especifico(int**matriz, int n, double t, int pasos_eq, int pasos_medida)
-{
-    paso_montecarlo(matriz, pasos_eq, n, t);
+        energias[j] = energia_actual;
+        fprintf(energiaFile, "%.6f %d\n", energia_actual, j + 1);
+        Guardar_Red(file, red);
 
-    double suma_E=0.0;
-    double suma_E2= 0.0;
+        if ((j + 1) % 100 == 0) {
+            double magnetizacionSuperior = magnetizacion_mitad_superior(red);
+            double magnetizacionInferior = magnetizacion_mitad_inferior(red);
 
-    for(int i=0; i<pasos_medida; ++i)
-    {
-        paso_montecarlo(matriz, 1, n, t);
-        
-        double E= energia_total(matriz, n);
-        suma_E += E;
-        suma_E2 += E*E;
-    }
+            *sumaMagnetizacionSuperior += magnetizacionSuperior;
+            *sumaMagnetizacionInferior += magnetizacionInferior;
 
-    double promedio_E = suma_E / pasos_medida;
-    double promedio_E2 = suma_E2 / pasos_medida;
+            calcularDensidadesFila(red, fila, &densidadpositivo, &densidadnegativo);
 
-    double cN= (promedio_E2 - promedio_E*promedio_E) / (t*t * n*n);
+            *sumadensidadpositivo += densidadpositivo;
+            *sumadensidadnegativo += densidadnegativo;
 
-    return cN;
-}
-
-double magnetizacion_superior(int**matriz, int n)
-{
-    double suma = 0.0;
-
-    for(int i=0; i<n/2; ++i)
-    {
-        for(int j=0; j<n; ++j)
-        {
-            suma += matriz[i][j];
+            energiaConfiguracion = energias[j];
+            *sumaEnergia += energiaConfiguracion;
+            *sumaEnergiacuadrada += energiaConfiguracion * energiaConfiguracion;
+            *sumaMagnetizacion2 += magnetizacionSuperior * magnetizacionSuperior;
+            (*configuracionesCambiadas)++;
         }
     }
 
-    return suma/(n*n/2.0);
-}
-
-double magnetizacion_inferior(int**matriz, int n)
-{
-    double suma = 0.0;
-
-    for(int i=n/2; i<n; ++i)
-    {
-        for(int j=0; j<n; ++j)
-        {
-            suma += matriz[i][j];
-        }
-    }
-
-    return suma/(n*n/2.0);
-}
-
-double susceptibilidad_magnetica(int**matriz, int n, double t, int pasos_eq, int pasos_medida)
-
-{
-    paso_montecarlo(matriz, pasos_eq, n, t);
-    double suma_m=0.0;
-    double suma_m2=0.0;
-
-    for(int i=0; i<pasos_medida; ++i)
-    {
-        paso_montecarlo(matriz, 1, n, t);
-        
-        double m= magnetizacion_superior(matriz, n);
-        suma_m += m;
-        suma_m2 += m*m;
-    }
-
-    double promedio_m = suma_m / pasos_medida;
-    double promedio_m2 = suma_m2 / pasos_medida;
-
-    double susceptibilidad= (promedio_m2 - promedio_m*promedio_m) / (t * n * n);
-
-    return susceptibilidad;
-}
-
-void histograma_spins_fila(int** matriz, int n, int* histo) 
-{
-    // Inicializa el histograma
-    for (int k = 0; k <= n; ++k)
-        histo[k] = 0;
-
-    // Cuenta cuántos +1 hay en cada fila y actualiza el histograma
-    for (int i = 0; i < n; ++i) {
-        int cuenta = 0;
-        for (int j = 0; j < n; ++j)
-            if (matriz[i][j] == 1)
-                cuenta++;
-        histo[cuenta]++;
-    }
-}
-
-/*
-int indice_periodico_filas(int i, int n) {
-    if (i == 0) return 2;           // La fila 0 solo se conecta con la 2
-    if (i == n-1) return n-2;       // La fila n-1 solo se conecta con la n-2
-    if (i < 0) return n-2;          // Para filas internas
-    if (i >= n) return 1;           // Para filas internas
-    return i;
-}
-
-void paso_kawasaki(int** matriz, int n, double t)
-{
-    int i = 1 + rand() % (n - 2); // Solo filas internas
-    int j = rand() % n;
-    int s = matriz[i][j];
-
-    int vecinos[4][2] = {{-1,0}, {1,0}, {0,-1}, {0,1}};
-    int candidatos[4][2];
-    int num_candidatos = 0;
-
-    for (int k = 0; k < 4; ++k)
-    {
-        int ni = i + vecinos[k][0];
-        int nj = j + vecinos[k][1];
-
-        // Asegurarse de que ni está en [1, n-2] y nj en [0, n-1]
-        if (ni >= 1 && ni < n - 1)
-        {
-            // Usar índice periódico solo en la dirección j
-            nj = indice_periodico(nj, n);
-
-            if (matriz[ni][nj] != s)
-            {
-                candidatos[num_candidatos][0] = ni;
-                candidatos[num_candidatos][1] = nj;
-                num_candidatos++;
-            }
-        }
-    }
-
-    if (num_candidatos == 0) return;
-
-    int elegido = rand() % num_candidatos;
-    int i2 = candidatos[elegido][0];
-    int j2 = candidatos[elegido][1];
-
-    int dE = delta_E(matriz, n, i, j, i2, j2);
-    double probabilidad = exp(-dE / t);
-    double r = (double)rand() / RAND_MAX;
-
-    if (dE < 0 || r < probabilidad)
-    {
-        int aux = matriz[i][j];
-        matriz[i][j] = matriz[i2][j2];
-        matriz[i2][j2] = aux;
-    }
-}
-*/
-
-
-// --- Versión estándar: condiciones periódicas en filas ---
-int indice_periodico_filas(int i, int n) {
-    // Periodicidad estándar: conecta la última fila con la primera
-    if (i >= n) return 0;
-    if (i < 0) return n - 1;
-    return i;
-}
-
-// --- Versión estándar: Kawasaki con condiciones periódicas en ambas direcciones ---
-void paso_kawasaki(int** matriz, int n, double t)
-{
-    int i = rand() % n;
-    int j = rand() % n;
-    int s = matriz[i][j];
-
-    int vecinos[4][2] = {{-1,0}, {1,0}, {0,-1}, {0,1}};
-    int candidatos[4][2];
-    int num_candidatos = 0;
-
-    for (int k = 0; k < 4; ++k)
-    {
-        int ni = indice_periodico_filas(i + vecinos[k][0], n);
-        int nj = indice_periodico(j + vecinos[k][1], n);
-
-        if (matriz[ni][nj] != s)
-        {
-            candidatos[num_candidatos][0] = ni;
-            candidatos[num_candidatos][1] = nj;
-            num_candidatos++;
-        }
-    }
-
-    if (num_candidatos == 0) return;
-
-    int elegido = rand() % num_candidatos;
-    int i2 = candidatos[elegido][0];
-    int j2 = candidatos[elegido][1];
-
-    int dE = delta_E(matriz, n, i, j, i2, j2);
-    double probabilidad = exp(-dE / t);
-    double r = (double)rand() / RAND_MAX;
-
-    if (dE < 0 || r < probabilidad)
-    {
-        int aux = matriz[i][j];
-        matriz[i][j] = matriz[i2][j2];
-        matriz[i2][j2] = aux;
-    }
+    fclose(file);
+    fclose(energiaFile);
+    return 0;
 }
