@@ -7,11 +7,14 @@
 double T_ini = 0.25;
 double T_fin = 5.0;
 double T_step = 0.25;
+int N;
+int N_ini = 16;
+int N_fin = 128;
+int N_step = 16;
 
-#define N 32
+
 #define pasos 100000
 
-// --- Prototipos ---
 void configurar_mitad(int matriz[N][N]);
 void guardar_matriz(FILE *f, int matriz[N][N]);
 double energia_local(int matriz[N][N], int x1, int y1, int x2, int y2);
@@ -24,73 +27,74 @@ void susceptibilidad(double sumaM, double sumaM2, int n, double T, double *chi);
 int kawasaki(int matriz[N][N], double *sumaE, double *sumaE2, double *sumaMagSup, double *sumaMagInf, int *nCambios, double *sumaPos, double *sumaNeg, double *sumaMag2, double T);
 
 int main() {
-    int red[N][N];
-    srand(time(NULL));
-    const char* archivo_tiempo = "tiempos.txt";
-    clock_t t_ini_clock, t_fin_clock;
-    double t_total;
-    t_ini_clock = clock();
+    srand(time(NULL)); // Semilla para números aleatorios
+    for (int N_actual = N_ini; N_actual <= N_fin; N_actual += N_step) {
+        N= N_actual;
+        int red[N][N];
 
-    char fname_sup[64], fname_inf[64], fname_pos[64], fname_neg[64], fname_cv[64], fname_chi[64], fname_energia[64];
-    sprintf(fname_sup, "promedio_magnetizacionsuperior%d.txt", N);
-    sprintf(fname_inf, "promedio_magnetizacioninferior%d.txt", N);
-    sprintf(fname_pos, "promedio_densidadpositivo%d.txt", N);
-    sprintf(fname_neg, "promedio_densidadnegativo%d.txt", N);
-    sprintf(fname_cv, "filecv%d.txt", N);
-    sprintf(fname_chi, "susceptibilidad%d.txt", N);
-    sprintf(fname_energia, "energia%d.txt", N);
+        char fname_sup[64], fname_inf[64], fname_pos[64], fname_neg[64], fname_cv[64], fname_chi[64], fname_energia[64];
+        sprintf(fname_sup, "promedio_magnetizacionsuperior%d.txt", N);
+        sprintf(fname_inf, "promedio_magnetizacioninferior%d.txt", N);
+        sprintf(fname_pos, "promedio_densidadpositivo%d.txt", N);
+        sprintf(fname_neg, "promedio_densidadnegativo%d.txt", N);
+        sprintf(fname_cv, "filecv%d.txt", N);
+        sprintf(fname_chi, "susceptibilidad%d.txt", N);
+        sprintf(fname_energia, "promedio_energia%d.txt", N);
 
-    FILE *fsup = fopen(fname_sup, "w");
-    FILE *finf = fopen(fname_inf, "w");
-    FILE *fpos = fopen(fname_pos, "w");
-    FILE *fneg = fopen(fname_neg, "w");
-    FILE *fcv = fopen(fname_cv, "w");
-    FILE *fchi = fopen(fname_chi, "w");
-    FILE *fener = fopen(fname_energia, "w");
+        FILE *fsup = fopen(fname_sup, "w");
+        FILE *finf = fopen(fname_inf, "w");
+        FILE *fpos = fopen(fname_pos, "w");
+        FILE *fneg = fopen(fname_neg, "w");
+        FILE *fcv = fopen(fname_cv, "w");
+        FILE *fchi = fopen(fname_chi, "w");
+        FILE *fenergia = fopen(fname_energia, "w");
 
-    for (double T = T_ini; T <= T_fin + 1e-8; T += T_step) {
-        configurar_mitad(red);
+        clock_t t_ini_clock = clock();
 
-        double sumaSup = 0.0, sumaInf = 0.0, sumaE = 0.0, sumaE2 = 0.0, sumaPos = 0.0, sumaNeg = 0.0, sumaMag2 = 0.0;
-        int cambios = 0;
-        double cv, chi;
+        for (double T = T_ini; T <= T_fin + 1e-8; T += T_step) {
+            configurar_mitad(red);
 
-        kawasaki(red, &sumaE, &sumaE2, &sumaSup, &sumaInf, &cambios, &sumaPos, &sumaNeg, &sumaMag2, T);
+            double sumaSup = 0.0, sumaInf = 0.0, sumaE = 0.0, sumaE2 = 0.0, sumaPos = 0.0, sumaNeg = 0.0, sumaMag2 = 0.0;
+            int cambios = 0;
+            double cv, chi;
 
-        double promSup = sumaSup / cambios;
-        double promInf = sumaInf / cambios;
-        double promPos = sumaPos / (cambios * N);
-        double promNeg = sumaNeg / (cambios * N);
-        double energiaMedia = sumaE / cambios;
+            kawasaki(red, &sumaE, &sumaE2, &sumaSup, &sumaInf, &cambios, &sumaPos, &sumaNeg, &sumaMag2, T);
 
-        calor_especifico(sumaE, sumaE2, cambios, T, &cv);
-        susceptibilidad(sumaSup, sumaMag2, cambios, T, &chi);
+            double promSup = sumaSup / cambios;
+            double promInf = sumaInf / cambios;
+            double promPos = sumaPos / (cambios * N);
+            double promNeg = sumaNeg / (cambios * N);
+            double energia_media = sumaE / cambios;
 
-        fprintf(fsup, "%g %g\n", promSup, T);
-        fprintf(finf, "%g %g\n", promInf, T);
-        fprintf(fneg, "%g %g\n", promNeg, T);
-        fprintf(fpos, "%g %g\n", promPos, T);
-        fprintf(fcv, "%g %g\n", cv, T);
-        fprintf(fchi, "%g %g\n", chi, T);
-        fprintf(fener, "%g %d\n", energiaMedia, (int)(T * 100));
+            calor_especifico(sumaE, sumaE2, cambios, T, &cv);
+            susceptibilidad(sumaSup, sumaMag2, cambios, T, &chi);
 
-        printf("T=%.2f Completado\n", T);
+            fprintf(fsup, "%g %g\n", promSup, T);
+            fprintf(finf, "%g %g\n", promInf, T);
+            fprintf(fneg, "%g %g\n", promNeg, T);
+            fprintf(fpos, "%g %g\n", promPos, T);
+            fprintf(fcv, "%g %g\n", cv, T);
+            fprintf(fchi, "%g %g\n", chi, T);
+            fprintf(fenergia, "%g %g\n", energia_media, T);
+
+            printf("N=%d T=%.2f Terminado\n", N, T);
+        }
+
+        fclose(fsup); fclose(finf); fclose(fpos); fclose(fneg); fclose(fcv); fclose(fchi); fclose(fenergia);
+
+        clock_t t_fin_clock = clock();
+        double t_total = (double)(t_fin_clock - t_ini_clock) / CLOCKS_PER_SEC;
+
+        FILE *ft = fopen("tiemposN.txt", "a");
+        if (ft != NULL) {
+            fprintf(ft, "%d\t%.6f\n", N, t_total);
+            fclose(ft);
+        }
+
+        printf("Bucle de temperatura para N=%d completado en %.g segundos.\n", N, t_total);
     }
-
-    fclose(fsup); fclose(finf); fclose(fpos); fclose(fneg); fclose(fcv); fclose(fchi); fclose(fener);
-
-    t_fin_clock = clock();
-    t_total = (double)(t_fin_clock - t_ini_clock) / CLOCKS_PER_SEC;
-
-    FILE *ft = fopen("tiemposN.txt", "a");
-    if (ft != NULL) {
-        fprintf(ft, "%d\t%.6f\n", N, t_total);
-        fclose(ft);
-    }
-
     return 0;
 }
-
 
 void configurar_mitad(int matriz[N][N]) {
     int mitad = ((N-2) * N) / 2, pos = 0;
