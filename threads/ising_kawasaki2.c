@@ -8,9 +8,9 @@ double T_ini = 0.25;
 double T_fin = 5.0;
 double T_step = 0.25;
 int N;
-int N_ini = 16;
+int N_ini = 32;
 int N_fin = 128;
-int N_step = 16;
+int N_step = 32;
 
 
 #define pasos 10000
@@ -92,7 +92,7 @@ int main() {
             fclose(ft);
         }
 
-        printf("Bucle de temperatura para N=%d completado en %.g segundos.\n", N, t_total);
+        printf("Bucle de temperatura para N=%d completado en %.6f segundos.\n", N, t_total);
     }
     return 0;
 }
