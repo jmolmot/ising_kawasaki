@@ -8,12 +8,12 @@ double T_ini = 0.25;
 double T_fin = 5.0;
 double T_step = 0.25;
 int N;
-int N_ini = 32;
+int N_ini = 16;
 int N_fin = 128;
-int N_step = 32;
+int N_step = 16;
 
 
-#define pasos 10000
+#define pasos 50000
 
 void configurar_mitad(int matriz[N][N]);
 void guardar_matriz(FILE *f, int matriz[N][N]);
@@ -28,18 +28,19 @@ int kawasaki(int matriz[N][N], double *sumaE, double *sumaE2, double *sumaMagSup
 
 int main() {
     srand(time(NULL)); // Semilla para números aleatorios
+    // Puedes crear la carpeta desde C si quieres, pero aquí asumimos que ya existe
     for (int N_actual = N_ini; N_actual <= N_fin; N_actual += N_step) {
-        N= N_actual;
+        N = N_actual;
         int red[N][N];
 
-        char fname_sup[64], fname_inf[64], fname_pos[64], fname_neg[64], fname_cv[64], fname_chi[64], fname_energia[64];
-        sprintf(fname_sup, "promedio_magnetizacionsuperior%d.txt", N);
-        sprintf(fname_inf, "promedio_magnetizacioninferior%d.txt", N);
-        sprintf(fname_pos, "promedio_densidadpositivo%d.txt", N);
-        sprintf(fname_neg, "promedio_densidadnegativo%d.txt", N);
-        sprintf(fname_cv, "filecv%d.txt", N);
-        sprintf(fname_chi, "susceptibilidad%d.txt", N);
-        sprintf(fname_energia, "promedio_energia%d.txt", N);
+        char fname_sup[128], fname_inf[128], fname_pos[128], fname_neg[128], fname_cv[128], fname_chi[128], fname_energia[128];
+        sprintf(fname_sup, "archivos/promedio_magnetizacionsuperior%d.txt", N);
+        sprintf(fname_inf, "archivos/promedio_magnetizacioninferior%d.txt", N);
+        sprintf(fname_pos, "archivos/promedio_densidadpositivo%d.txt", N);
+        sprintf(fname_neg, "archivos/promedio_densidadnegativo%d.txt", N);
+        sprintf(fname_cv, "archivos/filecv%d.txt", N);
+        sprintf(fname_chi, "archivos/susceptibilidad%d.txt", N);
+        sprintf(fname_energia, "archivos/promedio_energia%d.txt", N);
 
         FILE *fsup = fopen(fname_sup, "w");
         FILE *finf = fopen(fname_inf, "w");
@@ -85,7 +86,7 @@ int main() {
         clock_t t_fin_clock = clock();
         double t_total = (double)(t_fin_clock - t_ini_clock) / CLOCKS_PER_SEC;
 
-        FILE *ft = fopen("tiemposN.txt", "a");
+        FILE *ft = fopen("archivos/tiemposN.txt", "a");
         if (ft != NULL) {
             fprintf(ft, "%d\t%.6f\n", N, t_total);
             fclose(ft);
