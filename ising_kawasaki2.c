@@ -13,7 +13,7 @@ int N_fin = 128;
 int N_step = 16;
 
 
-#define pasos 10000
+#define pasos 100000
 
 void configurar_mitad(int matriz[N][N]);
 void guardar_matriz(FILE *f, int matriz[N][N]);
